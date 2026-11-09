@@ -174,6 +174,27 @@ def evaluation_page(engine, user, now):
     st.bar_chart(frame, x="Tag", y=["Termine", "Follow-ups", "Verloren"], sort=False, stack=False)
 
 
+    with connection_scope(engine) as db:
+        query = (
+            "SELECT h.*, u.display_name FROM historical_call_totals h "
+            "JOIN users u ON u.id = h.user_id WHERE h.day BETWEEN ? AND ?"
+        )
+        params = (monday, sunday)
+        if person is not None:
+            query += " AND h.user_id = ?"
+            params += (person,)
+        history = db.execute(query + " ORDER BY h.day, u.display_name", params).fetchall()
+    if history:
+        st.subheader("Historische Nachträge")
+        st.caption("Übertragene Zählerstände. Die Wochensumme oben zeigt die in der App erfassten Anrufe.")
+        st.dataframe(pd.DataFrame([
+            {"Datum": row["day"].strftime("%d.%m.%Y"), "Person": row["display_name"],
+             **{label: row[key] if row[key] is not None else "–"
+                for label, key in METRIC_COUNTS if key in row}}
+            for row in history
+        ]), hide_index=True)
+
+
 def work_page(engine,user,weekly):
     import pandas as pd
     from datetime import datetime
