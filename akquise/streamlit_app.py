@@ -11,6 +11,7 @@ if ROOT not in sys.path:
 
 import streamlit as st
 from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 
 from akquise.config import get_database_url
 from akquise.metrics import calculate_metrics
@@ -24,7 +25,7 @@ st.set_page_config(page_title="Kairo Akquise", page_icon="📞", layout="wide")
 
 @st.cache_resource
 def _engine():
-    return create_engine(get_database_url())
+    return create_engine(get_database_url(), connect_args={"connect_timeout": 8})
 
 
 def lookup(email):
@@ -41,7 +42,11 @@ def main(identity=None, user_lookup=None, engine=None):
         if st.button("Mit Google anmelden", type="primary"):
             st.login()
         st.stop()
-    user = authorized_user(email, user_lookup or lookup)
+    try:
+        user = authorized_user(email, user_lookup or lookup)
+    except (OperationalError, RuntimeError):
+        st.error("Die Akquise-Datenbank ist momentan nicht erreichbar.")
+        st.stop()
     if not user or not user["active"]:
         st.title("Kein Zugang")
         st.button("Abmelden", on_click=st.logout)
