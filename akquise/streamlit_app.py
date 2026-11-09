@@ -201,26 +201,40 @@ def work_page(engine,user,weekly):
     for r in rows:
         d=dict(r); at=d.get("next_action_at")
         data.append({"id":d["id"],"lead_no":d["lead_no"],"status":status_label(d["acquisition_status"],d.get("last_reach")),
-                     "due":(at.astimezone(BERLIN).strftime("%H:%M") + (" · jetzt" if d["is_due"] else " · später")) if at else "",
+                     "due":(at.astimezone(BERLIN).strftime("%d.%m.%Y %H:%M") + (" · jetzt" if d["is_due"] else " · später")) if at else "",
                      "company_name":d["company_name"],"gf_name":d.get("gf_name") or "","phone_e164":d.get("phone_e164") or "",
                      "website":d.get("website") or "","last_attempt":d.get("last_attempt_at"),"legacy_note":(d.get("legacy_note") or "")[:140],
-                     "result":"","date":None,"note":""})
+                     "result":"","date":None,"due_edit":None,"note":""})
     frame=pd.DataFrame(data).set_index("id",drop=False)
     frame["date"] = pd.to_datetime(frame["date"])
+    frame["due_edit"] = pd.to_datetime(frame["due_edit"]).dt.date
+    if not weekly:
+        scheduled = sum(row["next_action_at"] is not None for row in rows)
+        st.subheader(f"Fälligkeiten · {scheduled}")
+        st.caption("Überfällige Rückrufe und Rückrufe für heute stehen oben in der Liste.")
     with st.form(f"calls_{weekly}", clear_on_submit=True):
-        st.caption("Ergebnis wählen, bei Follow-up und Termin ein Datum, dann Speichern.")
+        st.caption("Ergebnis wählen und speichern. Für Termine ist „Datum“ Pflicht.")
+        if not weekly:
+            st.caption("Für Follow-ups ist „Datum“ Pflicht.")
+        if weekly:
+            st.caption("Für Rückrufe und Follow-ups „Fälligkeit“ im Kalender wählen. Sie erscheinen am gewählten Tag unter „Heute“.")
         submitted_top = st.form_submit_button("Speichern", type="primary", key=f"save_top_{weekly}")
         config={"status":st.column_config.TextColumn("Status",disabled=True),"due":st.column_config.TextColumn("Fällig",disabled=True),
                 "company_name":st.column_config.TextColumn("Firma",disabled=True),"gf_name":st.column_config.TextColumn("GF",disabled=True),
                 "phone_e164":st.column_config.TextColumn("Telefon",disabled=True),"website":st.column_config.LinkColumn("Website",disabled=True,display_text="Öffnen"),
                 "lead_no":st.column_config.NumberColumn("Nr.",disabled=True),
                 "result":st.column_config.SelectboxColumn("Ergebnis ▾",options=["", *WORK_RESULTS]),
+                "due_edit":st.column_config.DateColumn("Fälligkeit",format="DD.MM.YYYY",disabled=not weekly),
                 "date":st.column_config.DatetimeColumn("Datum",format="DD.MM.YYYY HH:mm"),
                 "note":st.column_config.TextColumn("Notiz"),"last_attempt":st.column_config.DatetimeColumn("Letzter Versuch",disabled=True),
                 "legacy_note":st.column_config.TextColumn("Altnotiz",disabled=True)}
         order = ["lead_no", "status", "company_name", "gf_name", "phone_e164", "result", "date", "note"]
+        if weekly:
+            order.insert(order.index("date"), "due_edit")
+        else:
+            order.insert(1, "due")
         if not compact:
-            order += ["due", "website", "last_attempt", "legacy_note"]
+            order += ["website", "last_attempt", "legacy_note"]
         edited=st.data_editor(frame,column_config=config,column_order=order,hide_index=True,use_container_width=True,key=f"editor_{weekly}")
         submitted_bottom = st.form_submit_button("Speichern", type="primary", key=f"save_bottom_{weekly}")
     if submitted_top or submitted_bottom:

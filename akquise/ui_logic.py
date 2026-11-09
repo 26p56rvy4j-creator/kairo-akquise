@@ -46,6 +46,13 @@ def attempt_from_row(row, caller_id, now):
     payload = {"reach": reach, "outcome": outcome, "mail_requested": result == "Mail gewünscht",
                "note": row.get("note") or None}
     value = row.get("date")
+    due = row.get("due_edit")
+    if due is not None and due == due:
+        if date_field != "callback_at" and reach != "not_reached":
+            raise ValueError("Für dieses Ergebnis ist keine Rückruffälligkeit möglich.")
+        if value is not None and value == value:
+            raise ValueError("Bitte nur ein Datum für den Rückruf eingeben.")
+        date_field, value = "callback_at", due
     if date_field and value is not None and value == value:
         if not isinstance(value, datetime):
             value = datetime.combine(value, datetime.min.time())
@@ -68,6 +75,9 @@ def save_rows(rows, user, record, state, now):
     saved, errors, warnings = [], [], []
     for row in rows:
         if not row.get("result"):
+            due = row.get("due_edit")
+            if due is not None and due == due:
+                errors.append((row.get("lead_no"), "Bitte ein Anrufergebnis zur Fälligkeit wählen."))
             continue
         no = row.get("lead_no")
         try:
