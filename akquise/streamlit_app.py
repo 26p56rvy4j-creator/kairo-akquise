@@ -52,16 +52,22 @@ def main(identity=None, user_lookup=None, engine=None):
         st.button("Abmelden", on_click=st.logout)
         st.stop()
     engine = engine or _engine()
-    st.sidebar.caption(user["display_name"])
-    if st.sidebar.button("Abmelden"):
-        st.logout()
     pages = [st.Page(lambda: work_page(engine,user,False), title="Heute", icon="📞", url_path="heute", default=True),
              st.Page(lambda: work_page(engine,user,True), title="Nachfassrunde", icon="↩️", url_path="nachfassrunde"),
              st.Page(lambda: evaluation_page(engine, user, datetime.now(BERLIN)), title="Auswertung", url_path="auswertung"),
              st.Page(lambda: leads_page(engine,user), title="Leads", icon="🔎", url_path="leads")]
     if can(user,"manage_users"):
         pages.append(st.Page(lambda: users_page(engine,user), title="Nutzer", icon="👥", url_path="nutzer"))
-    st.navigation(pages).run()
+    selected = st.navigation(pages, position="hidden")
+    st.sidebar.subheader("Kaltakquise")
+    for page in pages:
+        st.sidebar.page_link(page)
+    st.sidebar.subheader("Setting")
+    st.sidebar.subheader("Closing")
+    st.sidebar.caption(user["display_name"])
+    if st.sidebar.button("Abmelden"):
+        st.logout()
+    selected.run()
 
 
 def kpi_card(label, value):
@@ -235,24 +241,19 @@ def work_page(engine,user,weekly):
         st.caption("Überfällige Rückrufe und Rückrufe für heute stehen oben in der Liste.")
     with st.form(f"calls_{weekly}", clear_on_submit=True):
         st.caption("Ergebnis wählen und speichern. Für Termine ist „Datum“ Pflicht.")
-        if not weekly:
-            st.caption("Für Follow-ups ist „Datum“ Pflicht.")
-        if weekly:
-            st.caption("Für Rückrufe und Follow-ups „Fälligkeit“ im Kalender wählen. Sie erscheinen am gewählten Tag unter „Heute“.")
+        st.caption("Bei „Follow-up“ und „Später melden“ den Rückruftag unter „Fälligkeit“ wählen.")
         submitted_top = st.form_submit_button("Speichern", type="primary", key=f"save_top_{weekly}")
         config={"status":st.column_config.TextColumn("Status",disabled=True),"due":st.column_config.TextColumn("Fällig",disabled=True),
                 "company_name":st.column_config.TextColumn("Firma",disabled=True),"gf_name":st.column_config.TextColumn("GF",disabled=True),
                 "phone_e164":st.column_config.TextColumn("Telefon",disabled=True),"website":st.column_config.LinkColumn("Website",disabled=True,display_text="Öffnen"),
                 "lead_no":st.column_config.NumberColumn("Nr.",disabled=True),
                 "result":st.column_config.SelectboxColumn("Ergebnis ▾",options=["", *WORK_RESULTS]),
-                "due_edit":st.column_config.DateColumn("Fälligkeit",format="DD.MM.YYYY",disabled=not weekly),
+                "due_edit":st.column_config.DateColumn("Fälligkeit",format="DD.MM.YYYY"),
                 "date":st.column_config.DatetimeColumn("Datum",format="DD.MM.YYYY HH:mm"),
                 "note":st.column_config.TextColumn("Notiz"),"last_attempt":st.column_config.DatetimeColumn("Letzter Versuch",disabled=True),
                 "legacy_note":st.column_config.TextColumn("Altnotiz",disabled=True)}
-        order = ["lead_no", "status", "company_name", "gf_name", "phone_e164", "result", "date", "note"]
-        if weekly:
-            order.insert(order.index("date"), "due_edit")
-        else:
+        order = ["lead_no", "status", "company_name", "gf_name", "phone_e164", "result", "due_edit", "date", "note"]
+        if not weekly:
             order.insert(1, "due")
         if not compact:
             order += ["website", "last_attempt", "legacy_note"]
